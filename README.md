@@ -74,7 +74,7 @@ pip install django-filterly
 
 No extra settings needed — filterly has zero Django app registration. Just import and use.
 
-> **Requirements:** Python ≥ 3.10 · Django ≥ 3.2
+> **Requirements:** Python ≥ 3.8 · Django ≥ 3.2
 
 ---
 
@@ -565,6 +565,14 @@ MIT — see [LICENSE](LICENSE).
 
 ## 👩‍💻 Author
 
-**Esraa Raffik Mashaal**  
-Senior Software Engineer  
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Esraa%20Mashaal-0077B5?style=flat&logo=linkedin)](https://www.linkedin.com/in/esraamashaal/)
+<table>
+  <tr>
+    <td>
+      <strong>Esraa Raffik Mashaal</strong><br/>
+      Senior Software Engineer<br/><br/>
+      <a href="https://www.linkedin.com/in/esraamashaal/">
+        <img src="https://img.shields.io/badge/LinkedIn-Esraa%20Mashaal-0077B5?style=for-the-badge&logo=linkedin&logoColor=white"/>
+      </a>
+    </td>
+  </tr>
+</table>

@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-filterly"
-version = "0.1.0"
+version = "0.1.1"
 description = "A clean, flexible Django queryset filtering library driven by query-string params."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 authors = [{ name = "Esraa", email = "esraa.mashaal96@gmail.com" }]
 keywords = ["django", "filter", "queryset", "api", "rest"]
 classifiers = [
@@ -21,6 +21,8 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
