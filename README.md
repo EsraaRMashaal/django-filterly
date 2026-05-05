@@ -9,46 +9,35 @@
 
 ---
 
+## ⚡ What You Get
+
+```
+GET /products?name__icontains=shirt&price__gte=100&is_active=true
+```
+
 ```python
-from django_filterly import FilterSet, FilterValidationError, FilterValueError
+from django_filterly import FilterSet
 
 def product_list(request):
-    """
-    Handles all of these in one call — no manual parsing needed:
+    qs = FilterSet(
+        queryset=Product.objects.all(),
+        params=request.GET,
+    ).qs
+    return JsonResponse(list(qs.values()), safe=False)
 
-    ?name__icontains=shirt          → WHERE name ILIKE '%shirt%'
-    ?price__range=10,500            → WHERE price BETWEEN 10 AND 500
-    ?is_active=true                 → WHERE is_active = TRUE
-    ?created_at__year=2024          → WHERE YEAR(created_at) = 2024
-    ?status__in=active,pending      → WHERE status IN ('active', 'pending')
-    ?deleted_at__isnull=true        → WHERE deleted_at IS NULL
-    ?status__not=draft              → .exclude(status='draft')
-    ?owner__email__icontains=gmail  → JOIN owner WHERE email ILIKE '%gmail%'
-    """
-    try:
-        return FilterSet(
-            queryset=Product.objects.select_related("owner").all(),
-            params=request.GET,
-            allowed_fields={"name", "price", "is_active", "status",
-                            "created_at", "deleted_at", "owner__email"},
-            allowed_lookups={"exact", "icontains", "gte", "lte", "range",
-                             "in", "isnull", "not", "year"},
-        ).qs
-
-    except FilterValidationError as e:
-        # e.field, e.lookup, e.code  →  "field_not_allowed" | "lookup_incompatible" | …
-        return HttpResponseBadRequest(str(e))
-
-    except FilterValueError as e:
-        # e.field, e.value, e.expected_type, e.code  →  "invalid_int" | "invalid_date" | …
-        return HttpResponseBadRequest(str(e))
+# Equivalent to:
+# Product.objects.filter(name__icontains="shirt")
+#                .filter(price__gte=100)
+#                .filter(is_active=True)
 ```
+
+That's it — no manual parsing, no type casting, no repetitive `if "field" in request.GET` blocks.
 
 ---
 
 ## 🚀 Key Features
 
-- **Zero Boilerplate Filtering** from query params — no manual parsing
+- **Zero-Boilerplate Filtering** from query params — no manual parsing
 - **Automatic Type Coercion** — bool, int, float, date, datetime, list, range, UUID
 - **Deep Relation Filtering** — `user__profile__city__icontains=Cairo`
 - **Built-In Validation** with structured errors and machine-readable codes
@@ -86,105 +75,6 @@ pip install django-filterly
 No extra settings needed — filterly has zero Django app registration. Just import and use.
 
 > **Requirements:** Python ≥ 3.10 · Django ≥ 3.2
-
----
-
-## ⚡ Quick Start
-
-```python
-# views.py
-from django_filterly import FilterSet
-
-def product_list(request):
-    qs = FilterSet(
-        queryset=Product.objects.all(),
-        params=request.GET,
-    ).qs
-    # ?name__icontains=shirt&price__gte=100&is_active=true
-    # → Product.objects.filter(name__icontains="shirt")
-    #                  .filter(price__gte=100)
-    #                  .filter(is_active=True)
-    return JsonResponse(list(qs.values()), safe=False)
-```
-
-That's it. filterly parses the query string, validates every param, coerces values to the right Python types, and chains the ORM calls for you.
-
----
-
-## 🛒 Real Example (E-commerce)
-
-A shopper hits this URL:
-
-```
-GET /products?price__gte=100&price__lte=500&is_active=true&category__name__icontains=shoes&stock__gt=0&created_at__year=2024&tags__overlap=sale,new&ordering=price
-```
-
-filterly handles it with zero boilerplate:
-
-```python
-from django_filterly import FilterSet, FilterValidationError, FilterValueError
-from django.http import JsonResponse, HttpResponseBadRequest
-
-def product_list(request):
-    try:
-        qs = FilterSet(
-            queryset=Product.objects.select_related("category").all(),
-            params=request.GET,
-            allowed_fields={
-                "price", "is_active", "stock", "created_at",
-                "category__name", "tags",
-            },
-            allowed_lookups={
-                "gte", "lte", "gt", "exact",
-                "icontains", "year", "overlap",
-            },
-        ).qs
-
-        return JsonResponse(list(qs.values()), safe=False)
-
-    except FilterValidationError as e:
-        return HttpResponseBadRequest({"error": str(e), "field": e.field, "code": e.code})
-
-    except FilterValueError as e:
-        return HttpResponseBadRequest({"error": str(e), "field": e.field, "code": e.code})
-```
-
-What filterly does under the hood for that URL:
-
-| Param | Parsed as | ORM call |
-|---|---|---|
-| `price__gte=100` | field=`price`, lookup=`gte`, value=`100.0` | `.filter(price__gte=100.0)` |
-| `price__lte=500` | field=`price`, lookup=`lte`, value=`500.0` | `.filter(price__lte=500.0)` |
-| `is_active=true` | field=`is_active`, lookup=`exact`, value=`True` | `.filter(is_active=True)` |
-| `category__name__icontains=shoes` | field=`category__name`, lookup=`icontains` | `.filter(category__name__icontains="shoes")` |
-| `stock__gt=0` | field=`stock`, lookup=`gt`, value=`0` | `.filter(stock__gt=0)` |
-| `created_at__year=2024` | field=`created_at`, lookup=`year`, value=`2024` | `.filter(created_at__year=2024)` |
-| `tags__overlap=sale,new` | field=`tags`, lookup=`overlap`, value=`["sale","new"]` | `.filter(tags__overlap=["sale","new"])` |
-
-> `ordering` is not a filter param — filterly ignores unknown params that don't match any lookup pattern.  
-> → So you can safely mix filtering with pagination, ordering, or custom query params.
-
----
-
-## 🔧 FilterSet Options
-
-```python
-FilterSet(
-    queryset,                    # any Django QuerySet
-    params,                      # request.GET or a plain dict
-    allowed_fields=None,         # whitelist — set of field paths
-    allowed_lookups=None,        # whitelist — set of lookup keywords
-    custom_transformers=None,    # dict of { field: callable }
-)
-```
-
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `queryset` | `QuerySet` | required | Source queryset; model is inferred automatically |
-| `params` | `QueryDict` / `dict` | required | Raw filter parameters |
-| `allowed_fields` | `set[str]` / `None` | `None` (all) | Restrict which fields callers may filter on |
-| `allowed_lookups` | `set[str]` / `None` | `None` (all) | Restrict which lookup keywords are accepted |
-| `custom_transformers` | `dict` / `None` | `None` | Per-field value conversion overrides |
 
 ---
 
@@ -268,19 +158,7 @@ FilterSet(
 
 ## 📖 Usage Examples
 
-### 1. Basic — inside a view
-
-```python
-from django_filterly import FilterSet
-
-def product_list(request):
-    return FilterSet(
-        queryset=Product.objects.all(),
-        params=request.GET,
-    ).qs
-```
-
-### 2. Plain dict — useful in tests or scripts
+### 1. Plain dict — useful in tests or scripts
 
 ```python
 qs = FilterSet(
@@ -289,7 +167,7 @@ qs = FilterSet(
 ).qs
 ```
 
-### 3. Boolean values
+### 2. Boolean values
 
 filterly accepts any of these for `True` / `False`:
 
@@ -298,43 +176,37 @@ true  1  yes  on   → True
 false 0  no   off  → False
 ```
 
-```
-?is_active=true
-?is_active=1
-?is_active=yes
-```
-
-### 4. Null checks
+### 3. Null checks
 
 ```
 ?deleted_at__isnull=true   → WHERE deleted_at IS NULL
 ?deleted_at__isnull=false  → WHERE deleted_at IS NOT NULL
 ```
 
-### 5. Exclude / NOT
+### 4. Exclude / NOT
 
 ```
 ?status__not=draft  →  .exclude(status__exact="draft")
 ```
 
-### 6. IN queries — two syntaxes
+### 5. IN queries — two syntaxes
 
 ```
-# comma-separated string
+# Comma-separated string
 ?status__in=active,pending,review
 
-# multi-value (Django QueryDict from ?status=active&status=pending)
+# Multi-value QueryDict (?status=active&status=pending)
 # auto-promoted to __in when the same key appears multiple times
 ```
 
-### 7. Range queries
+### 6. Range queries
 
 ```
-?price__range=10,500           → WHERE price BETWEEN 10 AND 500
+?price__range=10,500              → WHERE price BETWEEN 10 AND 500
 ?created_at__range=2024-01-01,2024-12-31
 ```
 
-### 8. Date & datetime
+### 7. Date & datetime
 
 ```
 ?created_at__date=2024-01-15
@@ -343,14 +215,14 @@ false 0  no   off  → False
 ?created_at__lte=2024-12-31T23:59:59Z   ← Z suffix handled
 ```
 
-### 9. Foreign key traversal — ORM style
+### 8. Foreign key traversal — ORM style
 
 ```
 ?owner__email__icontains=gmail.com
 ?user__age__gte=18
 ```
 
-### 10. Foreign key traversal — flat shorthand
+### 9. Foreign key traversal — flat shorthand
 
 Three or more underscore-separated segments where the last is a known lookup:
 
@@ -361,13 +233,13 @@ Three or more underscore-separated segments where the last is a known lookup:
 
 Plain two-segment fields (`is_active`, `created_at`, `user_id`) are **not** treated as flat notation.
 
-### 11. Deep / multi-hop relations
+### 10. Deep / multi-hop relations
 
 ```
 ?owner__profile__city__icontains=Cairo
 ```
 
-### 12. JSON field lookups
+### 11. JSON field lookups
 
 ```
 ?meta__has_key=color
@@ -376,7 +248,7 @@ Plain two-segment fields (`is_active`, `created_at`, `user_id`) are **not** trea
 ?meta__contains={"color": "red"}
 ```
 
-### 13. PostgreSQL array field lookups
+### 12. PostgreSQL array field lookups
 
 ```
 ?tags__contains=sale,new
@@ -384,19 +256,7 @@ Plain two-segment fields (`is_active`, `created_at`, `user_id`) are **not** trea
 ?tags__len=3
 ```
 
-### 14. Whitelist — restrict fields and lookups
-
-```python
-FilterSet(
-    queryset=Product.objects.all(),
-    params=request.GET,
-    allowed_fields={"price", "status", "created_at"},
-    allowed_lookups={"exact", "gte", "lte", "in"},
-).qs
-# Any field or lookup NOT in the whitelist raises FilterValidationError
-```
-
-### 15. Custom transformers — per-field value conversion
+### 13. Custom transformers — per-field value conversion
 
 ```python
 def parse_price(value, *, field, lookup):
@@ -410,14 +270,14 @@ def parse_price(value, *, field, lookup):
             expected_type="float", code="invalid_price",
         )
 
-FilterSet(
+qs = FilterSet(
     queryset=Product.objects.all(),
     params={"price__gte": "$100.00"},
     custom_transformers={"price": parse_price},
 ).qs
 ```
 
-### 16. DRF — inside a ListAPIView
+### 14. DRF — inside a ListAPIView
 
 ```python
 from rest_framework.generics import ListAPIView
@@ -427,15 +287,16 @@ class ProductListView(ListAPIView):
     serializer_class = ProductSerializer
 
     def get_queryset(self):
-        return FilterSet(
+        qs = FilterSet(
             queryset=Product.objects.all(),
             params=self.request.GET,
             allowed_fields={"name", "price", "is_active", "created_at"},
             allowed_lookups={"exact", "icontains", "gte", "lte", "range"},
         ).qs
+        return qs
 ```
 
-### 17. Subclassing FilterSet — reusable defaults per model
+### 15. Subclassing FilterSet — reusable defaults per model
 
 ```python
 class ProductFilterSet(FilterSet):
@@ -460,6 +321,146 @@ class ProductFilterSet(FilterSet):
 # In a view:
 qs = ProductFilterSet(request.GET).qs
 ```
+
+---
+
+## 🔧 Advanced Usage (Validation, Whitelisting, Errors)
+
+### Whitelisting fields and lookups
+
+`allowed_fields` and `allowed_lookups` are **optional**.
+
+- **Omit them** → filterly accepts any field that exists on the model and any supported lookup. Good for internal tools or trusted clients.
+- **Set them** → filterly rejects anything outside the whitelist with a `FilterValidationError`. Use this in public APIs to prevent callers from filtering on sensitive fields (e.g. `password`, `secret_token`) or using expensive lookups (e.g. `regex`).
+
+```python
+# No whitelist — all model fields and all supported lookups accepted
+qs = FilterSet(
+    queryset=Product.objects.all(),
+    params=request.GET,
+).qs
+
+# With whitelist — anything outside raises FilterValidationError
+qs = FilterSet(
+    queryset=Product.objects.all(),
+    params=request.GET,
+    allowed_fields={"price", "status", "created_at"},   # only these fields
+    allowed_lookups={"exact", "gte", "lte", "in"},      # only these lookups
+).qs
+```
+
+### Full example with error handling
+
+```python
+from django_filterly import FilterSet, FilterValidationError, FilterValueError
+
+def product_list(request):
+    """
+    Examples:
+    ?name__icontains=shirt
+    ?price__range=10,500
+    ?is_active=true
+    ?created_at__year=2024
+    ?status__in=active,pending
+    ?deleted_at__isnull=true
+    ?status__not=draft
+    ?owner__email__icontains=gmail
+    """
+    try:
+        qs = FilterSet(
+            queryset=Product.objects.select_related("owner").all(),
+            params=request.GET,
+            allowed_fields={"name", "price", "is_active", "status",
+                            "created_at", "deleted_at", "owner__email"},
+            allowed_lookups={"exact", "icontains", "gte", "lte", "range",
+                             "in", "isnull", "not", "year"},
+        ).qs
+        return JsonResponse(list(qs.values()), safe=False)
+
+    except FilterValidationError as e:
+        # e.field, e.lookup, e.code  →  "field_not_allowed" | "lookup_incompatible" | …
+        return HttpResponseBadRequest(str(e))
+
+    except FilterValueError as e:
+        # e.field, e.value, e.expected_type, e.code  →  "invalid_int" | "invalid_date" | …
+        return HttpResponseBadRequest(str(e))
+```
+
+### Error codes reference
+
+| Code | Exception | When raised |
+|---|---|---|
+| `field_not_allowed` | `FilterValidationError` | Field not in `allowed_fields` |
+| `lookup_not_supported` | `FilterValidationError` | Lookup unknown to filterly |
+| `lookup_not_allowed` | `FilterValidationError` | Lookup not in `allowed_lookups` |
+| `lookup_incompatible` | `FilterValidationError` | Lookup wrong for field's data type |
+| `field_does_not_exist` | `FilterValidationError` | Field not on the model |
+| `not_a_relation` | `FilterValidationError` | FK traversal on a non-FK field |
+| `invalid_bool` | `FilterValueError` | Value not a recognised boolean |
+| `invalid_int` | `FilterValueError` | Value not a valid integer |
+| `invalid_float` | `FilterValueError` | Value not a valid float |
+| `invalid_number` | `FilterValueError` | Value not a valid number |
+| `invalid_date` | `FilterValueError` | Value not ISO 8601 date |
+| `invalid_datetime` | `FilterValueError` | Value not ISO 8601 datetime |
+| `invalid_time` | `FilterValueError` | Value not a valid time |
+| `invalid_uuid` | `FilterValueError` | Value not a valid UUID |
+| `invalid_range` | `FilterValueError` | Range does not have exactly 2 values |
+| `empty_list` | `FilterValueError` | `__in` list is empty |
+| `null_value` | `FilterValueError` | `None` passed for a non-nullable field |
+
+---
+
+## 🛒 Real Example (E-commerce)
+
+A shopper hits this URL:
+
+```
+GET /products?price__gte=100&price__lte=500&is_active=true&category__name__icontains=shoes&stock__gt=0&created_at__year=2024&tags__overlap=sale,new&ordering=price
+```
+
+filterly handles all 7 filter params in one call:
+
+```python
+from django_filterly import FilterSet, FilterValidationError, FilterValueError
+from django.http import JsonResponse, HttpResponseBadRequest
+
+def product_list(request):
+    try:
+        qs = FilterSet(
+            queryset=Product.objects.select_related("category").all(),
+            params=request.GET,
+            allowed_fields={
+                "price", "is_active", "stock", "created_at",
+                "category__name", "tags",
+            },
+            allowed_lookups={
+                "gte", "lte", "gt", "exact",
+                "icontains", "year", "overlap",
+            },
+        ).qs
+        return JsonResponse(list(qs.values()), safe=False)
+
+    except FilterValidationError as e:
+        return HttpResponseBadRequest({"error": str(e), "field": e.field, "code": e.code})
+
+    except FilterValueError as e:
+        return HttpResponseBadRequest({"error": str(e), "field": e.field, "code": e.code})
+```
+
+What filterly does under the hood for that URL:
+
+| Param | Parsed as | ORM call |
+|---|---|---|
+| `price__gte=100` | field=`price`, lookup=`gte`, value=`100.0` | `.filter(price__gte=100.0)` |
+| `price__lte=500` | field=`price`, lookup=`lte`, value=`500.0` | `.filter(price__lte=500.0)` |
+| `is_active=true` | field=`is_active`, lookup=`exact`, value=`True` | `.filter(is_active=True)` |
+| `category__name__icontains=shoes` | field=`category__name`, lookup=`icontains` | `.filter(category__name__icontains="shoes")` |
+| `stock__gt=0` | field=`stock`, lookup=`gt`, value=`0` | `.filter(stock__gt=0)` |
+| `created_at__year=2024` | field=`created_at`, lookup=`year`, value=`2024` | `.filter(created_at__year=2024)` |
+| `tags__overlap=sale,new` | field=`tags`, lookup=`overlap`, value=`["sale","new"]` | `.filter(tags__overlap=["sale","new"])` |
+
+> **Note:** `ordering` is not a filter param — filterly ignores any param that doesn't match a field + lookup pattern.  
+> → You can safely mix filtering with pagination, ordering, or any other custom query params in the same URL.
 
 ---
 
@@ -504,67 +505,6 @@ to_date("2024-01-15",  field="created_at", lookup="date")  # → date(2024, 1, 1
 
 ---
 
-## ⚠️ Error Handling
-
-filterly raises two structured exceptions you can catch and inspect:
-
-```python
-from django_filterly import FilterValidationError, FilterValueError
-
-try:
-    qs = FilterSet(
-        queryset=Product.objects.all(),
-        params=request.GET,
-        allowed_fields={"price", "name"},
-    ).qs
-
-except FilterValidationError as e:
-    # Raised for invalid field/lookup combinations
-    print(e.field)   # "status"
-    print(e.lookup)  # "icontains"
-    print(e.code)    # one of:
-    #   "field_not_allowed"    — field not in allowed_fields
-    #   "lookup_not_supported" — lookup unknown to filterly
-    #   "lookup_not_allowed"   — lookup not in allowed_lookups
-    #   "lookup_incompatible"  — lookup invalid for this field type
-    #   "field_does_not_exist" — field not found on the model
-    #   "not_a_relation"       — FK traversal on a non-relation field
-
-except FilterValueError as e:
-    # Raised when a value cannot be coerced to the expected type
-    print(e.field)          # "price"
-    print(e.value)          # "$abc"
-    print(e.expected_type)  # "float"
-    print(e.code)           # one of:
-    #   "invalid_bool"   "invalid_int"   "invalid_float"
-    #   "invalid_date"   "invalid_datetime"  "invalid_time"
-    #   "invalid_range"  "empty_list"    "null_value"
-```
-
-### Error codes reference
-
-| Code | Exception | When raised |
-|---|---|---|
-| `field_not_allowed` | `FilterValidationError` | Field not in `allowed_fields` |
-| `lookup_not_supported` | `FilterValidationError` | Lookup unknown to filterly |
-| `lookup_not_allowed` | `FilterValidationError` | Lookup not in `allowed_lookups` |
-| `lookup_incompatible` | `FilterValidationError` | Lookup wrong for field's data type |
-| `field_does_not_exist` | `FilterValidationError` | Field not on the model |
-| `not_a_relation` | `FilterValidationError` | FK traversal on a non-FK field |
-| `invalid_bool` | `FilterValueError` | Value not a recognised boolean |
-| `invalid_int` | `FilterValueError` | Value not a valid integer |
-| `invalid_float` | `FilterValueError` | Value not a valid float |
-| `invalid_number` | `FilterValueError` | Value not a valid number |
-| `invalid_date` | `FilterValueError` | Value not ISO 8601 date |
-| `invalid_datetime` | `FilterValueError` | Value not ISO 8601 datetime |
-| `invalid_time` | `FilterValueError` | Value not a valid time |
-| `invalid_uuid` | `FilterValueError` | Value not a valid UUID |
-| `invalid_range` | `FilterValueError` | Range does not have exactly 2 values |
-| `empty_list` | `FilterValueError` | `__in` list is empty |
-| `null_value` | `FilterValueError` | `None` passed for a non-nullable field |
-
----
-
 ## 🗂 Project Structure
 
 ```
@@ -591,26 +531,26 @@ django-filterly/
 ## 🧪 Running the Tests
 
 ```bash
-# clone and set up
+# Clone and set up
 git clone https://github.com/esraamashaal/django-filterly.git
 cd django-filterly
 
-# create and activate virtual environment
+# Create and activate virtual environment
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 source .venv/bin/activate       # macOS / Linux
 
-# install dev dependencies
+# Install dev dependencies
 pip install -e ".[dev]"
 
-# run all tests with coverage
+# Run all tests with coverage
 python run_tests.py
 
-# or with pytest directly
+# Or with pytest directly
 pytest tests/ -v
 pytest tests/ -v --tb=short --cov=django_filterly --cov-report=term-missing
 
-# run a specific test class
+# Run a specific test class
 pytest tests/ -k TestParser -v
 pytest tests/ -k TestFilterSet -v
 ```
@@ -626,4 +566,5 @@ MIT — see [LICENSE](LICENSE).
 ## 👩‍💻 Author
 
 **Esraa Raffik Mashaal**  
+Senior Software Engineer  
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Esraa%20Mashaal-0077B5?style=flat&logo=linkedin)](https://www.linkedin.com/in/esraamashaal/)
